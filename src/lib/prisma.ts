@@ -856,6 +856,15 @@ export function getSchema() {
   return connectionUrl.searchParams.get('schema');
 }
 
+// Pool-Obergrenze aus der URL (?connection_limit=N), wie Prisma sie ohne
+// Treiberadapter lesen wuerde. Der pg-Treiber kennt den Parameter nicht und
+// wuerde sonst mit seinem Standard von 10 Verbindungen je Prozess fahren.
+function getPoolMax(databaseUrl: string) {
+  const limit = Number(new URL(databaseUrl).searchParams.get('connection_limit'));
+
+  return Number.isInteger(limit) && limit > 0 ? limit : undefined;
+}
+
 function getClient() {
   const url = process.env.DATABASE_URL;
   const replicaUrl = process.env.DATABASE_REPLICA_URL;
@@ -867,7 +876,7 @@ function getClient() {
 
   const schema = getSchema();
 
-  const baseAdapter = new PrismaPg({ connectionString: url }, { schema });
+  const baseAdapter = new PrismaPg({ connectionString: url, max: getPoolMax(url) }, { schema });
 
   const baseClient = new PrismaClient({
     adapter: baseAdapter,
@@ -885,7 +894,10 @@ function getClient() {
     return baseClient;
   }
 
-  const replicaAdapter = new PrismaPg({ connectionString: replicaUrl }, { schema });
+  const replicaAdapter = new PrismaPg(
+    { connectionString: replicaUrl, max: getPoolMax(replicaUrl) },
+    { schema },
+  );
 
   const replicaClient = new PrismaClient({
     adapter: replicaAdapter,
