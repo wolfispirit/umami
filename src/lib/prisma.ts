@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { readReplicas } from '@prisma/extension-read-replicas';
 import debug from 'debug';
+import pg from 'pg';
 import { PrismaClient } from '@/generated/prisma/client';
 import { DATA_TYPE, DEFAULT_PAGE_SIZE, FILTER_COLUMNS, OPERATORS, SESSION_COLUMNS } from './constants';
 import { filtersObjectToArray } from './params';
@@ -865,6 +866,22 @@ function getPoolMax(databaseUrl: string) {
   return Number.isInteger(limit) && limit > 0 ? limit : undefined;
 }
 
+// Eigener Pool statt Adapter-Konfiguration: Bei ?schema=... bekommt jede neue
+// Verbindung den Suchpfad gesetzt, bevor sie eine Abfrage sieht. Das SET vor
+// den Rohabfragen (executeRawQuery) laeuft sonst auf einer anderen
+// Pool-Verbindung als die Abfrage selbst -> "relation ... does not exist".
+function createPool(connectionString: string, schema: string | null) {
+  const pool = new pg.Pool({ connectionString, max: getPoolMax(connectionString) });
+
+  if (schema) {
+    pool.on('connect', client => {
+      client.query(`SET search_path TO "${schema}";`).catch(e => log('search_path', e));
+    });
+  }
+
+  return pool;
+}
+
 function getClient() {
   const url = process.env.DATABASE_URL;
   const replicaUrl = process.env.DATABASE_REPLICA_URL;
@@ -876,7 +893,7 @@ function getClient() {
 
   const schema = getSchema();
 
-  const baseAdapter = new PrismaPg({ connectionString: url, max: getPoolMax(url) }, { schema });
+  const baseAdapter = new PrismaPg(createPool(url, schema), { schema });
 
   const baseClient = new PrismaClient({
     adapter: baseAdapter,
@@ -894,10 +911,7 @@ function getClient() {
     return baseClient;
   }
 
-  const replicaAdapter = new PrismaPg(
-    { connectionString: replicaUrl, max: getPoolMax(replicaUrl) },
-    { schema },
-  );
+  const replicaAdapter = new PrismaPg(createPool(replicaUrl, schema), { schema });
 
   const replicaClient = new PrismaClient({
     adapter: replicaAdapter,
