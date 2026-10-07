@@ -176,12 +176,14 @@
     "d3-color": "^3.1.0",
     "deepmerge-ts": "^8.0.2",
     "esbuild": "^0.28.2",
-    "fast-uri": "^3.1.7",
+    "fast-uri": "^3.1.8",
     "fflate": "^0.4.9",
     "js-yaml": "^4.3.2",
     "mysql2": "^3.23.1",
     "picomatch": "^4.0.4",
-    "shell-quote": "^1.9.0",
+    "sharp": "^0.35.5",
+    "shell-quote": "^1.11.0",
+    "source-map-js": "^1.2.2",
     "vite": "^8.0.16"
   },
   "allowScripts": {
